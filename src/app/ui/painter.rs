@@ -32,25 +32,25 @@
 ///           \                                                                            /
 ///            \------------------ main window -------------------------------------------/
 /// ```
-use std::borrow::Cow;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::time::Duration;
 
-use tui::backend::Backend;
-use tui::layout::{Alignment, Constraint, Direction, Layout, Rect};
-use tui::style::{Color, Modifier, Style};
-use tui::widgets::{Axis, Block, Borders, Chart, Dataset, Gauge, Marker, Paragraph, Row, Table, Tabs, Text, Widget};
-use tui::Frame;
+use ratatui::Frame;
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::symbols;
+use ratatui::text::{Line, Span, Text};
+use ratatui::widgets::{Axis, Block, Borders, Chart, Dataset, Gauge, Paragraph, Row, Table, Tabs};
 
+use battery::State;
+use battery::units::Unit;
 use battery::units::electric_potential::volt;
 use battery::units::energy::{joule, watt_hour};
 use battery::units::power::watt;
 use battery::units::ratio::{percent, ratio};
 use battery::units::thermodynamic_temperature::{degree_celsius, kelvin};
 use battery::units::time::second;
-use battery::units::Unit;
-use battery::State;
 
 use super::{ChartData, TabBar, Units, View};
 
@@ -68,7 +68,7 @@ impl<'i> Painter<'i> {
         Painter(context)
     }
 
-    pub fn draw<B: Backend>(&self, mut frame: Frame<B>) {
+    pub fn draw(&self, frame: &mut Frame) {
         let main = Layout::default()
             .direction(Direction::Vertical)
             .constraints(
@@ -78,7 +78,7 @@ impl<'i> Painter<'i> {
                 ]
                 .as_ref(),
             )
-            .split(frame.size());
+            .split(frame.area());
 
         // Left column with info and right column with graphs
         let main_columns = Layout::default()
@@ -121,40 +121,34 @@ impl<'i> Painter<'i> {
             .split(main_columns[1]);
 
         // Drawing all the things now!
-        self.draw_tabs(&mut frame, main[0]);
-        self.draw_state_of_charge_bar(&mut frame, left_column[0]);
-        self.draw_common_info(&mut frame, left_column[1]);
-        self.draw_energy_info(&mut frame, left_column[2]);
-        self.draw_timing_info(&mut frame, left_column[3]);
-        self.draw_environment_info(&mut frame, left_column[4]);
-        self.draw_chart(&self.view.voltage(), &mut frame, right_column[0]);
-        self.draw_chart(&self.view.energy_rate(), &mut frame, right_column[1]);
-        self.draw_chart(&self.view.temperature(), &mut frame, right_column[2]);
+        self.draw_tabs(frame, main[0]);
+        self.draw_state_of_charge_bar(frame, left_column[0]);
+        self.draw_common_info(frame, left_column[1]);
+        self.draw_energy_info(frame, left_column[2]);
+        self.draw_timing_info(frame, left_column[3]);
+        self.draw_environment_info(frame, left_column[4]);
+        self.draw_chart(&self.view.voltage(), frame, right_column[0]);
+        self.draw_chart(&self.view.energy_rate(), frame, right_column[1]);
+        self.draw_chart(&self.view.temperature(), frame, right_column[2]);
     }
 
-    pub fn draw_tabs<B: Backend>(&self, frame: &mut Frame<B>, area: Rect) {
-        Tabs::default()
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(" Batteries ") // Note that spaces are intentional in here
-                    .title_style(Style::default()),
-            )
-            .titles(self.tabs.titles())
-            .select(self.tabs.index())
+    pub fn draw_tabs(&self, frame: &mut Frame, area: Rect) {
+        let tab_titles = self.tabs.titles().iter().map(|s| s.as_str()).collect::<Vec<_>>();
+        let tabs = Tabs::new(tab_titles)
+            .block(Block::default().borders(Borders::ALL).title(" Batteries "))
             .style(Style::default().fg(Color::Cyan))
             .highlight_style(Style::default().fg(Color::White))
-            .render(frame, area);
+            .select(self.tabs.index());
+        frame.render_widget(tabs, area);
     }
 
-    pub fn draw_state_of_charge_bar<B: Backend>(&self, frame: &mut Frame<B>, area: Rect) {
+    pub fn draw_state_of_charge_bar(&self, frame: &mut Frame, area: Rect) {
         let value = f64::from(self.view.battery().state_of_charge().get::<ratio>());
         let value_label = f64::from(self.view.battery().state_of_charge().get::<percent>());
 
         // create blocks for gauge and text
         let gauge_block = Block::default()
             .title(" State of charge ")
-            .title_style(Style::default())
             .borders(Borders::ALL & !Borders::RIGHT);
         let text_block = Block::default().borders(Borders::ALL & !Borders::LEFT);
 
@@ -178,62 +172,57 @@ impl<'i> Painter<'i> {
         };
 
         // create colored text with separator from gauge
-        let text = [
-            Text::Raw(Cow::from(" ")),
-            Text::Styled(
-                Cow::from(format!("{:>6.2} %\n", value_label)),
+        let text = Text::from(vec![
+            Line::from(" "),
+            Line::from(Span::styled(
+                format!("{:>6.2} %", value_label),
                 Style::default().fg(text_color),
-            ),
-        ];
+            )),
+        ]);
 
         // render components
-        Gauge::default()
+        let gauge = Gauge::default()
             .block(gauge_block)
             .ratio(value)
-            .style(Style::default().bg(Color::Black).fg(gauge_color))
-            .label(&"")
-            .render(frame, gauge_area);
-        Paragraph::new(text.iter())
-            .block(text_block)
-            .alignment(Alignment::Right)
-            .render(frame, text_area);
+            .gauge_style(Style::default().fg(gauge_color))
+            .style(Style::default().bg(Color::Black))
+            .label("");
+        frame.render_widget(gauge, gauge_area);
+
+        let paragraph = Paragraph::new(text).block(text_block).alignment(Alignment::Right);
+        frame.render_widget(paragraph, text_area);
     }
 
-    pub fn draw_chart<B: Backend>(&self, data: &ChartData, frame: &mut Frame<B>, area: Rect) {
+    pub fn draw_chart(&self, data: &ChartData, frame: &mut Frame, area: Rect) {
         let title = format!(" {} ", data.title());
-        let block = Block::default()
-            .title(&title)
-            .title_style(Style::default())
-            .borders(Borders::ALL);
+        let block = Block::default().title(title.clone()).borders(Borders::ALL);
         let value = data.current();
-        // tui automatically hides chart legend if it's height is higher than `chart.height / 3`.
-        // Since we have 3 charts already, legend will be invisible for most monitors,
-        // so instead writing value as a X axis label
-        let x_axis: Axis<String> = Axis::default()
-            .title(&value)
+
+        // X axis shows current value as title
+        let x_axis = Axis::default()
+            .title(value)
             .style(Style::default().fg(Color::Reset))
             .bounds(data.x_bounds());
+
         let y_labels = data.y_labels();
-        let y_axis: Axis<String> = Axis::default()
+        let y_axis = Axis::default()
             .title(data.y_title())
-            .labels(&y_labels)
+            .labels(y_labels)
             .bounds(data.y_bounds());
 
-        Chart::default()
-            .block(block)
-            .x_axis(x_axis)
-            .y_axis(y_axis)
-            .datasets(&[Dataset::default()
-                .marker(Marker::Braille)
-                .style(Style::default().fg(Color::Green))
-                .data(data.points())])
-            .render(frame, area)
+        let dataset = Dataset::default()
+            .marker(symbols::Marker::Braille)
+            .style(Style::default().fg(Color::Green))
+            .data(data.points());
+
+        let chart = Chart::new(vec![dataset]).block(block).x_axis(x_axis).y_axis(y_axis);
+
+        frame.render_widget(chart, area);
     }
 
-    fn draw_common_info<B: Backend>(&self, frame: &mut Frame<B>, area: Rect) {
+    fn draw_common_info(&self, frame: &mut Frame, area: Rect) {
         let block = Block::default()
             .title(" Information ") // Note that spaces are intentional
-            .title_style(Style::default())
             .borders(Borders::LEFT | Borders::TOP | Borders::RIGHT);
 
         let tech = &format!("{}", self.view.battery().technology());
@@ -256,7 +245,7 @@ impl<'i> Painter<'i> {
         self.draw_info_table(header, &items, block, frame, area);
     }
 
-    fn draw_energy_info<B: Backend>(&self, frame: &mut Frame<B>, area: Rect) {
+    fn draw_energy_info(&self, frame: &mut Frame, area: Rect) {
         let block = Block::default().borders(Borders::LEFT | Borders::RIGHT);
         let battery = self.view.battery();
         let config = self.view.config();
@@ -315,7 +304,7 @@ impl<'i> Painter<'i> {
         self.draw_info_table(header, &items, block, frame, area);
     }
 
-    fn draw_timing_info<B: Backend>(&self, frame: &mut Frame<B>, area: Rect) {
+    fn draw_timing_info(&self, frame: &mut Frame, area: Rect) {
         let block = Block::default().borders(Borders::LEFT | Borders::RIGHT);
         let battery = self.view.battery();
 
@@ -335,7 +324,7 @@ impl<'i> Painter<'i> {
         self.draw_info_table(header, &items, block, frame, area);
     }
 
-    fn draw_environment_info<B: Backend>(&self, frame: &mut Frame<B>, area: Rect) {
+    fn draw_environment_info(&self, frame: &mut Frame, area: Rect) {
         let block = Block::default().borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM);
         let battery = self.view.battery();
         let config = self.view.config();
@@ -354,14 +343,7 @@ impl<'i> Painter<'i> {
         self.draw_info_table(header, &items, block, frame, area);
     }
 
-    fn draw_info_table<B: Backend>(
-        &self,
-        header: [&str; 2],
-        items: &[[&str; 2]],
-        block: Block,
-        frame: &mut Frame<B>,
-        area: Rect,
-    ) {
+    fn draw_info_table(&self, header: [&str; 2], items: &[[&str; 2]], block: Block, frame: &mut Frame, area: Rect) {
         // convert header and items to strings
         let header: Vec<String> = header.iter().cloned().map(|elem| elem.to_string()).collect();
         let items: Vec<[String; 2]> = items
@@ -371,14 +353,19 @@ impl<'i> Painter<'i> {
             .collect();
 
         // convert items to rows
-        let rows = items.iter().map(|item| Row::Data(item.iter()));
+        let rows = items
+            .iter()
+            .map(|item| Row::new(vec![item[0].clone(), item[1].clone()]));
 
         // create table
-        Table::new(header.iter(), rows)
-            .header_style(Style::default().modifier(Modifier::BOLD))
-            .block(block)
-            .widths(&[17, 17])
-            .render(frame, area);
+        let table = Table::new(rows, [17, 17])
+            .header(
+                Row::new(header.iter().cloned().collect::<Vec<_>>())
+                    .style(Style::default().add_modifier(Modifier::BOLD)),
+            )
+            .block(block);
+
+        frame.render_widget(table, area);
     }
 }
 

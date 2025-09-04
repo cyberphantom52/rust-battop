@@ -1,21 +1,12 @@
 use std::str::FromStr;
 
 use crate::Error;
+use clap::ValueEnum;
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, ValueEnum)]
 pub enum Units {
     Human,
     Si,
-}
-
-impl Units {
-    // Why do you even need this, when clap provides `arg_enum!` macro?
-    // I just do not like that results are capitalized.
-    // Who the hell want to write manually arguments like `-u Human`?
-    // `-u human` is much prettier.
-    pub fn arg_variants() -> [&'static str; 2] {
-        ["human", "si"]
-    }
 }
 
 impl FromStr for Units {

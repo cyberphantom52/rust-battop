@@ -2,24 +2,23 @@ use std::io;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use termion::input::MouseTerminal;
-use termion::raw::IntoRawMode;
-use termion::screen::AlternateScreen;
-use tui::backend::{Backend, TermionBackend};
-use tui::Terminal;
+use crossterm::execute;
+use crossterm::terminal::{EnterAlternateScreen, enable_raw_mode};
+use ratatui::Terminal;
+use ratatui::backend::{Backend, CrosstermBackend};
 
 use super::{Context, Painter, TabBar, View};
-use crate::app::Config;
 use crate::Result;
+use crate::app::Config;
 
 #[allow(clippy::redundant_closure)]
 pub fn init(config: Arc<Config>, views: Vec<View>) -> Result<Interface<impl Backend>> {
     debug_assert!(!views.is_empty());
 
-    let stdout = io::stdout().into_raw_mode()?;
-    let stdout = MouseTerminal::from(stdout);
-    let stdout = AlternateScreen::from(stdout);
-    let backend = TermionBackend::new(stdout);
+    let mut stdout = io::stdout();
+    enable_raw_mode()?;
+    execute!(stdout, EnterAlternateScreen)?;
+    let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
     terminal.hide_cursor()?;
 
@@ -62,5 +61,16 @@ impl<B: Backend> Interface<B> {
 
     pub fn tabs_mut(&mut self) -> &mut TabBar {
         &mut self.tabs
+    }
+}
+
+impl<B: Backend> Drop for Interface<B> {
+    fn drop(&mut self) {
+        // Show cursor again on exit
+        let _ = self.terminal.show_cursor();
+        // Disable raw mode if it was enabled
+        let _ = crossterm::terminal::disable_raw_mode();
+        // Leave the alternate screen
+        let _ = crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen);
     }
 }

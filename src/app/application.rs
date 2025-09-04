@@ -1,7 +1,7 @@
 use std::fmt;
 use std::sync::Arc;
 
-use tui::backend::Backend;
+use ratatui::backend::Backend;
 
 use super::config::Config;
 use super::events::{Event, EventHandler};
