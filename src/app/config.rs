@@ -1,6 +1,5 @@
 use std::str::FromStr;
 use std::time::Duration;
-use std::u64;
 
 use crate::app::ui::Units;
 use clap::Parser;

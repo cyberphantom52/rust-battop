@@ -1,9 +1,8 @@
-#[macro_use]
-extern crate log;
-
 use std::sync::Arc;
 
 use clap::Parser;
+use tracing::level_filters::LevelFilter;
+use tracing::{error, trace};
 
 mod app;
 mod errors;
@@ -12,11 +11,18 @@ pub use self::errors::{Error, Result};
 
 fn main() -> Result<()> {
     let config = Arc::new(app::config::Config::parse());
-    stderrlog::new()
-        .module(module_path!())
-        .verbosity(config.verbosity())
-        .timestamp(stderrlog::Timestamp::Second)
-        .init()?;
+
+    let level = match config.verbosity() {
+        0 => LevelFilter::ERROR,
+        1 => LevelFilter::WARN,
+        2 => LevelFilter::INFO,
+        3 => LevelFilter::DEBUG,
+        _ => LevelFilter::TRACE,
+    };
+    tracing_subscriber::fmt()
+        .with_max_level(level)
+        .with_writer(std::io::stderr)
+        .init();
 
     trace!("Starting with {:?}", &config);
     let mut app = app::init(config)?;

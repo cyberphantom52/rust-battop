@@ -2,6 +2,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use ratatui::backend::Backend;
+use tracing::{error, trace};
 
 use super::config::Config;
 use super::events::{Event, EventHandler};
@@ -27,7 +28,7 @@ pub fn init(config: Arc<Config>) -> Result<Application<impl Backend>> {
     }
 
     let events = EventHandler::from_config(&config);
-    let interface = ui::init(config.clone(), batteries)?;
+    let interface = ui::init(batteries)?;
 
     Ok(Application {
         manager,

@@ -1,6 +1,5 @@
 use std::io;
 use std::rc::Rc;
-use std::sync::Arc;
 
 use crossterm::execute;
 use crossterm::terminal::{EnterAlternateScreen, enable_raw_mode};
@@ -9,10 +8,9 @@ use ratatui::backend::{Backend, CrosstermBackend};
 
 use super::{Context, Painter, TabBar, View};
 use crate::Result;
-use crate::app::Config;
 
 #[allow(clippy::redundant_closure)]
-pub fn init(config: Arc<Config>, views: Vec<View>) -> Result<Interface<impl Backend>> {
+pub fn init(views: Vec<View>) -> Result<Interface<impl Backend>> {
     debug_assert!(!views.is_empty());
 
     let mut stdout = io::stdout();
@@ -26,7 +24,6 @@ pub fn init(config: Arc<Config>, views: Vec<View>) -> Result<Interface<impl Back
     let tabs = TabBar::new(tab_titles);
 
     Ok(Interface {
-        config,
         terminal,
         views,
         tabs,
@@ -36,7 +33,6 @@ pub fn init(config: Arc<Config>, views: Vec<View>) -> Result<Interface<impl Back
 /// Interface is a group tabs and tab contents
 #[derive(Debug)]
 pub struct Interface<B: Backend> {
-    config: Arc<Config>,
     terminal: Terminal<B>,
     views: Vec<View>,
     tabs: TabBar,

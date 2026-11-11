@@ -13,7 +13,6 @@ pub enum Error {
     Battery(battery::Error),
     Io(io::Error),
     Channel(mpsc::RecvError),
-    Logger(log::SetLoggerError),
     ParseError,
 }
 
@@ -23,7 +22,6 @@ impl error::Error for Error {
             Error::Battery(e) => Some(e),
             Error::Io(e) => Some(e),
             Error::Channel(e) => Some(e),
-            Error::Logger(e) => Some(e),
             _ => None,
         }
     }
@@ -38,7 +36,6 @@ impl fmt::Display for Error {
             Error::Battery(e) => fmt::Display::fmt(e, f),
             Error::Io(e) => fmt::Display::fmt(e, f),
             Error::Channel(e) => fmt::Display::fmt(e, f),
-            Error::Logger(e) => fmt::Display::fmt(e, f),
         }
     }
 }
@@ -58,11 +55,5 @@ impl From<io::Error> for Error {
 impl From<mpsc::RecvError> for Error {
     fn from(e: mpsc::RecvError) -> Self {
         Error::Channel(e)
-    }
-}
-
-impl From<log::SetLoggerError> for Error {
-    fn from(e: log::SetLoggerError) -> Self {
-        Error::Logger(e)
     }
 }

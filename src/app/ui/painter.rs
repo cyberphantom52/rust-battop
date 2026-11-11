@@ -127,9 +127,9 @@ impl<'i> Painter<'i> {
         self.draw_energy_info(frame, left_column[2]);
         self.draw_timing_info(frame, left_column[3]);
         self.draw_environment_info(frame, left_column[4]);
-        self.draw_chart(&self.view.voltage(), frame, right_column[0]);
-        self.draw_chart(&self.view.energy_rate(), frame, right_column[1]);
-        self.draw_chart(&self.view.temperature(), frame, right_column[2]);
+        self.draw_chart(self.view.voltage(), frame, right_column[0]);
+        self.draw_chart(self.view.energy_rate(), frame, right_column[1]);
+        self.draw_chart(self.view.temperature(), frame, right_column[2]);
     }
 
     pub fn draw_tabs(&self, frame: &mut Frame, area: Rect) {
@@ -185,7 +185,7 @@ impl<'i> Painter<'i> {
             .block(gauge_block)
             .ratio(value)
             .gauge_style(Style::default().fg(gauge_color))
-            .style(Style::default().bg(Color::Black))
+            .style(Style::default().bg(Color::Reset))
             .label("");
         frame.render_widget(gauge, gauge_area);
 
@@ -360,7 +360,7 @@ impl<'i> Painter<'i> {
         // create table
         let table = Table::new(rows, [17, 17])
             .header(
-                Row::new(header.iter().cloned().collect::<Vec<_>>())
+                Row::new(header.to_vec())
                     .style(Style::default().add_modifier(Modifier::BOLD)),
             )
             .block(block);

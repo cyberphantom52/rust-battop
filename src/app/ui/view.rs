@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use battery::units;
+use tracing::{trace, warn};
 
 use super::{ChartData, ChartType, Units};
 use crate::app::Config;
